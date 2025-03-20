@@ -16,7 +16,7 @@
 
 Team Members - 
 
-Chirag Agarwal A69034328
+Chirag Agarwal - A69034328
 
 Raghav Kachroo - A69035155
 
