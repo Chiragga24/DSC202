@@ -1,0 +1,9 @@
+neo4j
+streamlit
+pandas
+numpy
+matplotlib
+seaborn
+pyscopg2
+sqlalchemy
+sdv
