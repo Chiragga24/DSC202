@@ -1,0 +1,6 @@
+Metric,Min Normal Value,Max Normal Value,Min Anomaly Explanation,Max Anomaly Explanation
+Sleep (Hours),7,9,"<7 hours: Sleep deprivation, cognitive decline, weakened immunity.",">9 hours: May indicate depression, chronic fatigue, or other health issues."
+Heart Rate (Resting bpm),60,100,"<60 bpm (non-athletes): Bradycardia, possible heart block, or electrolyte imbalance.",">100 bpm: Tachycardia, stress, dehydration, or underlying heart issues."
+Intensity (HRV in ms),20,100,"<20 ms: High stress, poor recovery, chronic fatigue, or overtraining.",>100 ms: Rare but can occur in elite athletes; sudden spikes may indicate measurement errors.
+Calories (kcal/day),2000,2500,"<1500 kcal/day: Fatigue, muscle loss, nutrient deficiencies, or slowed metabolism.",">3500 kcal/day: Weight gain, obesity risk, and potential for insulin resistance."
+BMI,18.5,24.9,"<18.5: Underweight, risk of nutrient deficiency, hormonal imbalance, or osteoporosis.",">24.9: Overweight, increased risk of cardiovascular disease, diabetes, and joint stress."
