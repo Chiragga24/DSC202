@@ -4,6 +4,6 @@ pandas
 numpy
 matplotlib
 seaborn
-pyscopg2
+pyscopg2-binary
 sqlalchemy
 sdv
