@@ -81,60 +81,6 @@ def fetch_daily_metrics(user_id):
         "resting_hr": result[6]
     }
 
-# def fetch_anomalies(user_id):
-#     """Fetches anomalies for the user's latest data entry."""
-#     query = """
-#     WITH latest_metrics AS (
-#         SELECT d.user_id, d.activity_date, d.total_steps, d.total_calories, d.total_sleep_minutes,
-#             (SELECT ROUND(AVG(h.intensity_level), 2)
-#              FROM hourly_data h WHERE d.user_id = h.user_id
-#              AND DATE(h.activity_hour) = d.activity_date) AS avg_intensity,
-#             (SELECT mode() WITHIN GROUP (ORDER BY m.heart_rate)
-#              FROM minute_data m WHERE d.user_id = m.user_id
-#              AND DATE(m.activity_minute) = d.activity_date) AS resting_hr
-#         FROM daily_data d
-#         WHERE d.user_id = %s
-#         ORDER BY d.activity_date DESC
-#         LIMIT 1
-#     )
-#     SELECT
-#         lm.user_id, lm.activity_date,
-#         sleep_exp.min_anamoly_desc AS sleep_anomaly,
-#         hr_exp.min_anamoly_desc AS hr_anomaly,
-#         intensity_exp.min_anamoly_desc AS intensity_anomaly,
-#         calories_exp.min_anamoly_desc AS calories_anomaly
-#     FROM latest_metrics lm
-#     LEFT JOIN metric_explaination sleep_exp
-#         ON sleep_exp.metric_name = 'Sleep (Hours)'
-#         AND (lm.total_sleep_minutes < (sleep_exp.min_value * 60)
-#         OR lm.total_sleep_minutes > (sleep_exp.max_value * 60))
-#     LEFT JOIN metric_explaination hr_exp
-#         ON hr_exp.metric_name = 'Heart Rate (Resting bpm)'
-#         AND (lm.resting_hr < hr_exp.min_value OR lm.resting_hr > hr_exp.max_value)
-#     LEFT JOIN metric_explaination intensity_exp
-#         ON intensity_exp.metric_name = 'Intensity (HRV in ms)'
-#         AND (lm.avg_intensity < intensity_exp.min_value OR lm.avg_intensity > intensity_exp.max_value)
-#     LEFT JOIN metric_explaination calories_exp
-#         ON calories_exp.metric_name = 'Calories (kcal/day)'
-#         AND (lm.total_calories < calories_exp.min_value OR lm.total_calories > calories_exp.max_value);
-#     """
-
-#     with get_db_connection() as conn, conn.cursor() as cursor:
-#         cursor.execute(query, (user_id,))
-#         result = cursor.fetchone()
-
-#     if not result:
-#         return None
-
-#     return {
-#         "user_id": result[0],
-#         "activity_date": str(result[1]),
-#         "sleep_anomaly": result[2],
-#         "hr_anomaly": result[3],
-#         "intensity_anomaly": result[4],
-#         "calories_anomaly": result[5]
-#     }
-
 
 def fetch_met_values(user_id):
     """Fetches MET averages split by time zones for the last 7 days."""
@@ -185,12 +131,136 @@ def fetch_met_values(user_id):
     }
 
 
+def user_exists_in_neo4j(session, user_id):
+    """Check if the user already exists in Neo4j."""
+    result = session.run(
+        """OPTIONAL MATCH (u:User {user_id: $user_id})
+            RETURN 
+                CASE 
+                    WHEN u IS NOT NULL THEN "User Found"
+                    ELSE "User Not Found"
+            END AS result
+        """,
+        user_id=str(user_id)
+    )
+    if result.single()['result'] == "User Found":
+        return True
+    return False
+
+
+def create_or_update_user_in_neo4j(session, user_id, age, smoker, drinker, bmi):
+    """Create a new user node in Neo4j, handling nulls."""
+    session.run(
+        """
+        MERGE (u:User {user_id: $user_id})
+        SET
+            u.age = coalesce($age, u.age),
+            u.bmi = coalesce($bmi, u.bmi),
+            u.smoker = coalesce($smoker, u.smoker),
+            u.drinker = coalesce($drinker, u.drinker),
+            u.updated_at = date($updated_at)
+        """,
+        user_id=int(user_id),
+        age=int(age) if age is not None else None,  # Handle null age
+        # Handle null smoker
+        smoker=bool(smoker) if smoker is not None else None,
+        # Handle null drinker
+        drinker=bool(drinker) if drinker is not None else None,
+        bmi=float(bmi) if bmi is not None else None,  # Handle null bmi
+        updated_at=datetime.datetime.now().date().isoformat()
+    )
+
+
+def update_user_metrics(session, user_id, metrics):
+    """Update user metrics in Neo4j, handling nulls."""
+    session.run(
+        """
+        MATCH (u:User {user_id: $user_id})
+        MERGE (dm:DailyMetric {user_id: $user_id})
+        SET dm.activity_date = coalesce(date($activity_date), dm.activity_date),
+            dm.total_steps = coalesce($total_steps, dm.total_steps),
+            dm.total_calories = coalesce($total_calories, dm.total_calories),
+            dm.total_sleep_minutes = coalesce($total_sleep_minutes, dm.total_sleep_minutes),
+            dm.average_intensity = coalesce($average_intensity, dm.average_intensity),
+            dm.resting_hr = coalesce($resting_hr, dm.resting_hr)
+        MERGE (u)-[:HAS_DAILY_METRIC]->(dm)
+        RETURN dm
+        """,
+        user_id=int(user_id),
+        # Directly use .get() to avoid KeyError
+        activity_date=metrics.get('activity_date'),
+        total_steps=int(metrics.get('total_steps', 0)) if metrics.get(
+            'total_steps') is not None else None,
+        total_calories=float(metrics.get('total_calories', 0.0)) if metrics.get(
+            'total_calories') is not None else None,
+        total_sleep_minutes=int(metrics.get('total_sleep_minutes', 0)) if metrics.get(
+            'total_sleep_minutes') is not None else None,
+        average_intensity=float(metrics.get('avg_intensity', 0.0)) if metrics.get(
+            'avg_intensity') is not None else None,
+        resting_hr=float(metrics.get('resting_hr', 0.0)) if metrics.get(
+            'resting_hr') is not None else None
+    )
+
+
+def update_met_values(session, user_id, met_values):
+    """Update MET nodes for the user in Neo4j, handling nulls."""
+    session.run(
+        """
+        MATCH (u:User {user_id: $user_id})
+        MERGE (m:MET {user_id: $user_id})
+        SET m.early_morning_avg_met = coalesce($early_morning_avg_met, m.early_morning_avg_met),
+            m.morning_avg_met = coalesce($morning_avg_met, m.morning_avg_met),
+            m.afternoon_avg_met = coalesce($afternoon_avg_met, m.afternoon_avg_met),
+            m.evening_avg_met = coalesce($evening_avg_met, m.evening_avg_met)
+        MERGE (u)-[:HAS_MET]->(m)
+        RETURN m
+        """,
+        user_id=int(user_id),
+        early_morning_avg_met=float(met_values.get('early_morning', {}).get(
+            'avg_met', 0.0)) if met_values.get('early_morning') else None,
+        morning_avg_met=float(met_values.get('morning', {}).get(
+            'avg_met', 0.0)) if met_values.get('morning') else None,
+        afternoon_avg_met=float(met_values.get('afternoon', {}).get(
+            'avg_met', 0.0)) if met_values.get('afternoon') else None,
+        evening_avg_met=float(met_values.get('evening', {}).get(
+            'avg_met', 0.0)) if met_values.get('evening') else None
+    )
+
+
 def lambda_handler(event, context):
     user_id = event.get("user_id")
+    event_type = event.get("event_type")
+    user_id = int(user_id)
+    print("Invoked From TRIGGER!!!!")
     if not user_id:
         return {"error": "user_id is required"}
 
-    return {
-        "daily_metrics": fetch_daily_metrics(user_id),
-        "met_values": fetch_met_values(user_id)
-    }
+    with get_neo4j_session() as neo4j_session:
+
+        # Check if user already exists in Neo4j
+        if not user_exists_in_neo4j(neo4j_session, user_id):
+
+            # Fetch the new user demographics and add to Neo4j
+            with get_db_connection() as conn, conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT age, smoker, drinker, bmi FROM user_demographics WHERE user_id = %s",
+                    (user_id,)
+                )
+                demo = cursor.fetchone()
+                print(demo)
+            if demo:
+                create_or_update_user_in_neo4j(
+                    neo4j_session, user_id, demo[0], demo[1], demo[2], demo[3])
+            # else:
+            #     create_or_update_user_in_neo4j(neo4j_session, user_id, None, None, None, None)
+        # Fetch the latest daily metrics
+        metrics = fetch_daily_metrics(user_id)
+        if metrics:
+            update_user_metrics(neo4j_session, user_id, metrics)
+
+        # Fetch and update MET values
+        met_values = fetch_met_values(user_id)
+        if met_values:
+            update_met_values(neo4j_session, user_id, met_values)
+
+    return {"message": "User data processed successfully!"}
