@@ -77,6 +77,19 @@ Note: Due to storage constraints, the full dataset is **not uploaded** to this r
 The **database schema** and structure are documented in our **project report** (included in the repository).  
 Since the dataset is **large**, we did not upload the full data, but **sample data is provided in the repository** to allow easy testing.
 
+## Sample Data Dictionary
+
+The sample data files provided in the repository correspond to the database tables as follows:
+
+| CSV File Name                      | Database Table        | Description                                                                                                           |
+| ---------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `daily_data_merged.csv`            | `daily_data`          | Aggregated daily health metrics, including steps, calories, sleep, and activity levels.                               |
+| `hourly_merged_data.csv`           | `hourly_data`         | Hourly breakdown of user activity, steps, calories, and intensity levels.                                             |
+| `minute_merged_data.csv`           | `minute_data`         | Minute-level tracking of steps, heart rate, and activity metrics.                                                     |
+| `Merged_df.csv`                    | `user_demographics`   | User demographic information such as age, gender, height, and weight.                                                 |
+| `Likely Activity - Sheet1.csv`     | `met_data`            | MET (Metabolic Equivalent of Task) values indicating the estimated energy expenditure for different activity periods. |
+| `Metric Explanations - Sheet1.csv` | `metric_explanations` | Definitions and explanations of various health metrics used in the dataset.                                           |
+
 ## 🚀 How to Run Locally
 
 ### **1️⃣ Clone the Repository**
@@ -108,6 +121,11 @@ Use the following **User IDs** to explore data in the app:
 - 99990003
 - 5553957443
 - 6962181067
+
+## Technical Report
+
+For a detailed overview of this project, including methodology, implementation, and analysis, refer to the Final Technical Report:
+📄 [[Technical Report](https://github.com/Chiragga24/DSC202/blob/main/DSC_202_Final_Project.pdf)]
 
 ## 👥 Team Members
 
